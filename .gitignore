@@ -1,0 +1,9 @@
+.conda/
+frontend/.next/
+frontend/node_modules/
+frontend/.vercel/
+__pycache__/
+*.pyc
+.DS_Store
+.env
+.env.*
