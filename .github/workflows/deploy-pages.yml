@@ -12,7 +12,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: github-pages
+  group: pages
   cancel-in-progress: true
 
 jobs:
@@ -22,6 +22,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -29,29 +32,26 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-
       - name: Install dependencies
         working-directory: frontend
         run: npm ci
 
-      - name: Build static site
+      - name: Build
         working-directory: frontend
         env:
           GITHUB_ACTIONS: "true"
         run: npm run build
 
-      - name: Verify export output
+      - name: Ensure static output exists
         run: |
-          test -d frontend/out
           test -f frontend/out/index.html
-          find frontend/out -maxdepth 2 -type f | sed -n '1,80p'
+          touch frontend/out/.nojekyll
+          find frontend/out -maxdepth 2 | sed -n '1,100p'
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./frontend/out
+          path: frontend/out
 
   deploy:
     needs: build
