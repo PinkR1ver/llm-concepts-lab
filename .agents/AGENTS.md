@@ -37,6 +37,21 @@ Each concept module should ideally include:
 - Backend: Python
 - Python env: project-local conda env at `./.conda`
 
+## Network / deployment note
+
+This machine may require explicit proxy environment variables for stable GitHub network operations.
+When GitHub push or API operations are flaky, prefer using zsh and explicitly exporting:
+- `http_proxy=http://127.0.0.1:7890`
+- `https_proxy=http://127.0.0.1:7890`
+- optional SOCKS fallback:
+  - `all_proxy=socks5://127.0.0.1:7891`
+  - `ALL_PROXY=socks5://127.0.0.1:7891`
+
+For this project, the successful GitHub push path was:
+- zsh
+- HTTPS remote
+- explicit proxy env vars
+
 ## Design direction
 
 Aim for:

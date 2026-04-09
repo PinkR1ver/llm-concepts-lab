@@ -191,6 +191,19 @@ Store in stable files like:
 - Jude values design quality and interaction craft for concept pages
 - Jude is comfortable with project-local skills installed under `.agents/skills/`
 
+## Network environment memory
+
+For this machine, GitHub-related operations may require explicit proxy environment variables even when other auth/config already exists.
+Known useful values:
+- `http_proxy=http://127.0.0.1:7890`
+- `https_proxy=http://127.0.0.1:7890`
+- `all_proxy=socks5://127.0.0.1:7891`
+
+Successful deployment push recipe used in this project:
+- run from zsh
+- use HTTPS remote
+- export explicit proxy env vars before push
+
 ## Candidate project-local skills
 
 ### Impeccable
