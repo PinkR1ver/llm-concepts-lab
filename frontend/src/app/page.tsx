@@ -7,20 +7,48 @@ import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-const DEFAULT_VOCAB = ["I", "love", "LLMs", "<unk>"];
 const DEFAULT_TEXT = "I love LLMs";
-const EMBEDDING_TABLE = [
-  [0.2, 0.1, 0.7],
-  [0.9, 0.3, 0.1],
-  [0.4, 0.8, 0.5],
-  [0.0, 0.0, 0.0],
-];
+const EMBEDDING_DIM = 4;
 
 function tokenize(text: string) {
   return text
     .trim()
     .split(/\s+/)
     .filter(Boolean);
+}
+
+function buildDynamicVocab(tokens: string[]) {
+  const seen = new Set<string>();
+  const vocab: string[] = [];
+
+  for (const token of tokens) {
+    if (!seen.has(token)) {
+      seen.add(token);
+      vocab.push(token);
+    }
+  }
+
+  if (!seen.has("<unk>")) {
+    vocab.push("<unk>");
+  }
+
+  return vocab;
+}
+
+function buildVector(token: string, dim: number) {
+  if (token === "<unk>") {
+    return Array.from({ length: dim }, () => 0);
+  }
+
+  let seed = 0;
+  for (let i = 0; i < token.length; i += 1) {
+    seed = (seed * 131 + token.charCodeAt(i)) >>> 0;
+  }
+
+  return Array.from({ length: dim }, (_, idx) => {
+    const value = Math.sin(seed * (idx + 1) * 0.017 + idx * 0.31);
+    return Number((((value + 1) / 2) * 0.95 + 0.02).toFixed(2));
+  });
 }
 
 function SectionCard({ title, eyebrow, children, className }: { title: string; eyebrow?: string; children: React.ReactNode; className?: string }) {
@@ -85,27 +113,29 @@ export default function Home() {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(0);
 
   const tokens = useMemo(() => tokenize(text), [text]);
+  const vocab = useMemo(() => buildDynamicVocab(tokens), [tokens]);
+  const embeddingTable = useMemo(() => vocab.map((token) => buildVector(token, EMBEDDING_DIM)), [vocab]);
   const tokenIds = useMemo(
-    () => tokens.map((token) => DEFAULT_VOCAB.indexOf(token)).map((id) => (id === -1 ? 3 : id)),
-    [tokens]
+    () => tokens.map((token) => vocab.indexOf(token)).map((id) => (id === -1 ? vocab.indexOf("<unk>") : id)),
+    [tokens, vocab]
   );
-  const lookupResult = useMemo(() => tokenIds.map((id) => EMBEDDING_TABLE[id]), [tokenIds]);
+  const lookupResult = useMemo(() => tokenIds.map((id) => embeddingTable[id]), [tokenIds, embeddingTable]);
   const oneHot = useMemo(
     () =>
       tokenIds.map((id) =>
-        DEFAULT_VOCAB.map((_, vocabIndex) => (vocabIndex === id ? 1 : 0) as number)
+        vocab.map((_, vocabIndex) => (vocabIndex === id ? 1 : 0) as number)
       ),
-    [tokenIds]
+    [tokenIds, vocab]
   );
   const oneHotMatmul = useMemo(
     () =>
       oneHot.map((row) => {
-        const cols = EMBEDDING_TABLE[0].length;
+        const cols = embeddingTable[0]?.length ?? 0;
         return Array.from({ length: cols }, (_, col) =>
-          row.reduce((sum, value, vocabIndex) => sum + value * EMBEDDING_TABLE[vocabIndex][col], 0)
+          row.reduce((sum, value, vocabIndex) => sum + value * embeddingTable[vocabIndex][col], 0)
         );
       }),
-    [oneHot]
+    [oneHot, embeddingTable]
   );
 
   const focusedToken = selectedIndex !== null ? tokens[selectedIndex] : null;
@@ -149,17 +179,17 @@ export default function Home() {
                       setSelectedIndex(0);
                     }}
                     className="min-h-32 w-full rounded-[1.25rem] border border-border/70 bg-card px-4 py-4 text-base leading-7 text-card-foreground outline-none transition focus:border-ring"
-                    placeholder="Type a toy sentence like: I love LLMs"
+                    placeholder="Type any toy sentence you want"
                   />
                   <div className="mt-4 flex flex-wrap gap-3">
                     <Button variant="outline" onClick={() => { setText("I love LLMs"); setSelectedIndex(0); }}>
                       Reset example
                     </Button>
-                    <Button variant="outline" onClick={() => { setText("LLMs love I"); setSelectedIndex(0); }}>
-                      Reorder tokens
+                    <Button variant="outline" onClick={() => { setText("Transformers use attention well"); setSelectedIndex(0); }}>
+                      New sentence
                     </Button>
-                    <Button variant="outline" onClick={() => { setText("I study transformers"); setSelectedIndex(1); }}>
-                      Add unknown token
+                    <Button variant="outline" onClick={() => { setText("embedding embedding lookup matrix"); setSelectedIndex(0); }}>
+                      Repeated tokens
                     </Button>
                   </div>
                 </div>
@@ -180,7 +210,7 @@ export default function Home() {
                       </div>
                       <div className="rounded-2xl bg-card px-4 py-3">
                         <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Vector dim</p>
-                        <p className="mt-2 font-mono text-lg">3</p>
+                        <p className="mt-2 font-mono text-lg">{EMBEDDING_DIM}</p>
                       </div>
                     </div>
                     <div>
@@ -206,6 +236,7 @@ export default function Home() {
                     <li>• Token ids are labels, not geometry.</li>
                     <li>• Embedding gives each discrete token a learnable dense vector.</li>
                     <li>• These vectors are what later flow into position handling and attention.</li>
+                    <li>• In this toy demo, the vocab is built dynamically from your current input.</li>
                   </ul>
                 </div>
               </div>
@@ -222,6 +253,15 @@ export default function Home() {
                   <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-muted-foreground">Mental model</p>
                   <p className="mt-2 text-card-foreground">
                     <span className="font-medium">text → tokens → ids → row lookup → vectors</span>
+                  </p>
+                </div>
+                <div className="rounded-[1.5rem] bg-background/70 p-4">
+                  <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-muted-foreground">Equivalence</p>
+                  <p className="mt-2 text-card-foreground">
+                    <span className="font-medium">lookup result = one-hot matrix × embedding table</span>
+                  </p>
+                  <p className="mt-2 text-muted-foreground">
+                    So the lookup result is the sentence-level token embedding matrix: one row per token, one column per embedding dimension.
                   </p>
                 </div>
                 <div className="rounded-[1.5rem] bg-background/70 p-4">
@@ -309,8 +349,8 @@ export default function Home() {
             <div className="grid gap-5">
               <div className="grid gap-5 xl:grid-cols-2">
                 <div>
-                  <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.24em] text-muted-foreground">Embedding table (V × d)</p>
-                  <MatrixTable rows={EMBEDDING_TABLE} rowLabels={DEFAULT_VOCAB} highlightRow={focusedId} />
+                  <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.24em] text-muted-foreground">Dynamic vocab</p>
+                  <MatrixTable rows={embeddingTable.map((_, i) => [i])} rowLabels={vocab} highlightRow={focusedId} />
                 </div>
                 <div>
                   <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.24em] text-muted-foreground">Lookup result</p>
@@ -326,10 +366,8 @@ export default function Home() {
 
               <div className="grid gap-5 xl:grid-cols-2">
                 <div>
-                  <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.24em] text-muted-foreground">One-hot representation</p>
-                  {oneHot.length ? (
-                    <MatrixTable rows={oneHot} rowLabels={tokens} highlightRow={selectedIndex} />
-                  ) : null}
+                  <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.24em] text-muted-foreground">Embedding table (V × d)</p>
+                  <MatrixTable rows={embeddingTable} rowLabels={vocab} highlightRow={focusedId} />
                 </div>
                 <div>
                   <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.24em] text-muted-foreground">One-hot × embedding matrix</p>
@@ -339,13 +377,24 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="rounded-[1.5rem] border border-border/70 bg-background/72 p-5">
-                <p className="mb-2 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.24em] text-muted-foreground">
-                  <Braces className="size-3.5" /> Key engineering point
-                </p>
-                <p className="max-w-[72ch] text-sm leading-7 text-muted-foreground">
-                  In practice, frameworks use a direct lookup layer like <span className="font-mono text-card-foreground">nn.Embedding</span> instead of materializing one-hot vectors. The result is mathematically equivalent, but much more efficient.
-                </p>
+              <div className="grid gap-5 xl:grid-cols-2">
+                <div>
+                  <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.24em] text-muted-foreground">One-hot representation</p>
+                  {oneHot.length ? (
+                    <MatrixTable rows={oneHot} rowLabels={tokens} highlightRow={selectedIndex} />
+                  ) : null}
+                </div>
+                <div className="rounded-[1.5rem] border border-border/70 bg-background/72 p-5">
+                  <p className="mb-2 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.24em] text-muted-foreground">
+                    <Braces className="size-3.5" /> Key engineering point
+                  </p>
+                  <p className="max-w-[72ch] text-sm leading-7 text-muted-foreground">
+                    In practice, frameworks use a direct lookup layer like <span className="font-mono text-card-foreground">nn.Embedding</span> instead of materializing one-hot vectors. The result is mathematically equivalent, but much more efficient.
+                  </p>
+                  <p className="mt-4 max-w-[72ch] text-sm leading-7 text-muted-foreground">
+                    In this demo, the vocab and embedding table are rebuilt from your current sentence so that any words you type can still be displayed and inspected.
+                  </p>
+                </div>
               </div>
             </div>
           </SectionCard>
